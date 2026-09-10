@@ -18,6 +18,7 @@ Divisão de responsabilidades:
 import html
 import json
 import os
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime
@@ -123,7 +124,7 @@ estender cedo, varal coberto, recolher antes de determinado horário).
 
 
 def redigir_com_claude(a):
-    chave = os.environ.get("ANTHROPIC_API_KEY")
+    chave = (os.environ.get("ANTHROPIC_API_KEY") or "").strip()
     if not chave:
         return None
     dados = {k: v for k, v in a.items()}
@@ -143,6 +144,10 @@ def redigir_com_claude(a):
             resp = json.load(r)
         texto = "".join(b.get("text", "") for b in resp["content"]
                         if b.get("type") == "text").strip()
+    except urllib.error.HTTPError as e:
+        print(f"Claude indisponível ({e.code}), seguindo sem ele: "
+              f"{e.read().decode(errors='replace')}")
+        return None
     except Exception as e:
         print(f"Claude indisponível, seguindo sem ele: {e}")
         return None
@@ -170,14 +175,26 @@ def montar_mensagem(a, texto_claude=None):
 
 
 def enviar_telegram(texto):
-    token = os.environ["TELEGRAM_BOT_TOKEN"]
-    chat_id = os.environ["TELEGRAM_CHAT_ID"]
+    faltando = [v for v in ("TELEGRAM_BOT_TOKEN", "TELEGRAM_CHAT_ID") if not os.environ.get(v)]
+    if faltando:
+        raise SystemExit(f"ERRO: segredo ausente ou vazio no GitHub: {', '.join(faltando)}")
+    token = os.environ["TELEGRAM_BOT_TOKEN"].strip()
+    chat_id = os.environ["TELEGRAM_CHAT_ID"].strip()
     corpo = urllib.parse.urlencode(
         {"chat_id": chat_id, "text": texto, "parse_mode": "HTML"}).encode()
     url = f"https://api.telegram.org/bot{token}/sendMessage"
-    with urllib.request.urlopen(url, data=corpo, timeout=30) as r:
-        if not json.load(r).get("ok"):
-            raise RuntimeError("Telegram recusou a mensagem")
+    try:
+        with urllib.request.urlopen(url, data=corpo, timeout=30) as r:
+            json.load(r)
+    except urllib.error.HTTPError as e:
+        detalhe = e.read().decode(errors="replace")
+        dicas = {
+            401: "token inválido: confira TELEGRAM_BOT_TOKEN.",
+            404: "token inválido ou incompleto: confira TELEGRAM_BOT_TOKEN.",
+            400: "chat não encontrado: confira TELEGRAM_CHAT_ID e se você tocou em Iniciar no bot.",
+            403: "o bot foi bloqueado ou nunca recebeu Iniciar de você.",
+        }
+        raise SystemExit(f"ERRO Telegram {e.code}: {detalhe}\nDica: {dicas.get(e.code, 'veja o detalhe acima.')}")
 
 
 def main():
