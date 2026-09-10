@@ -1,1 +1,21 @@
+name: Previsão diária
 
+on:
+  schedule:
+    - cron: "0 10 * * *"   # 10h UTC = 7h em Brasília
+  workflow_dispatch:        # botão "Run workflow" para testar na hora
+
+jobs:
+  enviar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Enviar previsão
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: python previsao.py
