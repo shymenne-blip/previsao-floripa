@@ -2,7 +2,7 @@ name: Previsão diária
 
 on:
   schedule:
-    - cron: "23 9 * * *"
+    - cron: "37 7 * * *"
   workflow_dispatch:
 
 jobs:
